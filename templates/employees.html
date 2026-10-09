@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}ResQAI — Emergency Responder & Employee Roster{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-users-gear text-primary me-2"></i>Emergency Call-Center Responder Roster</h4>
+            <small class="text-muted">Manage employee availability, monitor active incident assignments, and track response SLAs.</small>
+        </div>
+        <div>
+            <button class="btn btn-sm btn-outline-primary" onclick="window.location.reload()">
+                <i class="fa-solid fa-rotate me-1"></i> Refresh Roster
+            </button>
+        </div>
+    </div>
+
+    <!-- Status Legend -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-3 d-flex flex-wrap gap-4 align-items-center">
+            <span class="small fw-bold text-secondary">Dispatcher Status Protocols:</span>
+            <div class="d-flex align-items-center gap-1 small">
+                <span class="badge bg-success">Available</span>
+                <span class="text-muted">— Eligible for auto-routing dispatch</span>
+            </div>
+            <div class="d-flex align-items-center gap-1 small">
+                <span class="badge bg-warning text-dark">Busy</span>
+                <span class="text-muted">— Handling active critical load (max 3)</span>
+            </div>
+            <div class="d-flex align-items-center gap-1 small">
+                <span class="badge bg-secondary">Offline</span>
+                <span class="text-muted">— Off-duty or on leave</span>
+            </div>
+            <div class="d-flex align-items-center gap-1 small">
+                <span class="badge bg-danger">No response</span>
+                <span class="text-muted">— Timed out during assignment; skipped</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employee Cards Grid -->
+    <div class="row g-3">
+        {% for emp in employees %}
+            <div class="col-lg-4 col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-dark me-1">{{ emp.badge_id }}</span>
+                            <strong class="text-dark">{{ emp.name }}</strong>
+                        </div>
+                        <span id="badge-status-{{ emp.id }}" class="badge 
+                            {% if emp.status == 'Available' %}bg-success
+                            {% elif emp.status == 'Busy' %}bg-warning text-dark
+                            {% elif emp.status == 'Offline' %}bg-secondary
+                            {% else %}bg-danger{% endif %}">
+                            {{ emp.status }}
+                        </span>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="text-muted small mb-2">
+                            <div><i class="fa-solid fa-id-card-clip me-1 text-primary"></i> <strong>Role:</strong> {{ emp.role }}</div>
+                            <div><i class="fa-solid fa-building-shield me-1 text-danger"></i> <strong>Dept:</strong> {{ emp.department }}</div>
+                            <div><i class="fa-solid fa-phone me-1 text-success"></i> <strong>Contact:</strong> {{ emp.phone }}</div>
+                        </div>
+
+                        <div class="row g-2 text-center my-3 bg-light p-2 rounded border">
+                            <div class="col-4">
+                                <small class="text-muted d-block" style="font-size:0.75rem;">Active Cases</small>
+                                <strong class="fs-5 text-dark">{{ emp.current_active_cases }}</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block" style="font-size:0.75rem;">Handled</small>
+                                <strong class="fs-5 text-dark">{{ emp.total_cases_handled }}</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block" style="font-size:0.75rem;">Avg SLA</small>
+                                <strong class="fs-5 text-primary">{{ emp.avg_response_seconds|round(1) }}s</strong>
+                            </div>
+                        </div>
+
+                        <!-- Availability Changer -->
+                        <div>
+                            <label class="form-label small fw-bold text-secondary mb-1">Set Availability Status:</label>
+                            <div class="btn-group w-100 btn-group-sm">
+                                <button class="btn {% if emp.status == 'Available' %}btn-success{% else %}btn-outline-success{% endif %}" onclick="updateEmployeeStatus({{ emp.id }}, 'Available')">
+                                    Avail
+                                </button>
+                                <button class="btn {% if emp.status == 'Busy' %}btn-warning text-dark{% else %}btn-outline-warning text-dark{% endif %}" onclick="updateEmployeeStatus({{ emp.id }}, 'Busy')">
+                                    Busy
+                                </button>
+                                <button class="btn {% if emp.status == 'Offline' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" onclick="updateEmployeeStatus({{ emp.id }}, 'Offline')">
+                                    Off
+                                </button>
+                                <button class="btn {% if emp.status == 'No response' %}btn-danger{% else %}btn-outline-danger{% endif %}" onclick="updateEmployeeStatus({{ emp.id }}, 'No response')">
+                                    No Resp
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+async function updateEmployeeStatus(empId, newStatus) {
+    try {
+        const resp = await fetch(`/api/employees/${empId}/status`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus, operator_name: "Shift Lead" })
+        });
+        const res = await resp.json();
+        if (res.success) {
+            window.location.reload();
+        } else {
+            alert("Error updating status: " + res.error);
+        }
+    } catch (e) {
+        alert("Network error: " + e.message);
+    }
+}
+</script>
+{% endblock %}

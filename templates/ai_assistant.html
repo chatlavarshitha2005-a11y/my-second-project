@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}ResQAI — AI Emergency Triage Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-brain text-primary me-2"></i>AI Emergency Triage & Analysis Studio</h4>
+            <small class="text-muted">Assisting emergency dispatchers with automated NLP extraction, triage recommendations, and audio transcript analysis.</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-success p-2">
+                <i class="fa-solid fa-bolt me-1"></i> Engine: Groq AI ({{ current_model }})
+            </span>
+            <span class="badge bg-secondary p-2">
+                <i class="fa-solid fa-shield me-1"></i> Human-in-the-Loop Approved
+            </span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Left: Incident Analysis Tool -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fa-solid fa-file-waveform text-danger me-2"></i>Live Incident AI Analyzer
+                    </h5>
+                    <span class="small text-muted">Select an active case to evaluate</span>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Choose Incident from Queue:</label>
+                        <select id="aiCaseSelect" class="form-select">
+                            <option value="">-- Choose an Incident to Analyze --</option>
+                            {% for c in cases %}
+                                <option value="{{ c.id }}" data-desc="{{ c.description }}" data-type="{{ c.emergency_type }}" data-loc="{{ c.location_name }}" data-affected="{{ c.people_affected }}">
+                                    {{ c.case_number }} | {{ c.emergency_type }} — {{ c.location_name }} ({{ c.priority }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-secondary">Emergency Description:</label>
+                        <textarea id="aiInputDesc" class="form-control" rows="3" placeholder="Select an incident above or paste raw citizen report text..."></textarea>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <button id="runAiTriageBtn" class="btn btn-primary fw-bold" onclick="executeAiTriage()">
+                            <i class="fa-solid fa-wand-magic-sparkles me-1"></i> Generate AI Analysis
+                        </button>
+                        <small class="text-muted">Advisory only • Human operator confirms dispatch</small>
+                    </div>
+
+                    <!-- AI Output Card -->
+                    <div id="aiAnalysisOutput" class="d-none">
+                        <div class="card bg-light border-primary p-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span id="aiModelBadge" class="badge bg-primary">Groq AI</span>
+                                <span id="aiPriorityBadge" class="badge bg-danger fs-6">CRITICAL</span>
+                            </div>
+                            
+                            <h6 class="fw-bold text-dark mb-1">Executive Summary:</h6>
+                            <p id="aiSummaryText" class="text-secondary small mb-3"></p>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-md-6">
+                                    <strong class="text-dark small d-block mb-1"><i class="fa-solid fa-list-check text-primary me-1"></i> Key Facts Extracted:</strong>
+                                    <ul id="aiFactsList" class="small ps-3 mb-0 text-secondary"></ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong class="text-dark small d-block mb-1"><i class="fa-solid fa-truck-medical text-danger me-1"></i> Recommended Resources:</strong>
+                                    <ul id="aiResourcesList" class="small ps-3 mb-0 text-primary fw-semibold"></ul>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <strong class="text-dark small d-block mb-1"><i class="fa-solid fa-clipboard-question text-warning me-1"></i> Missing Information / Follow-Up Questions:</strong>
+                                <ul id="aiMissingList" class="small ps-3 mb-0 text-danger"></ul>
+                            </div>
+
+                            <div>
+                                <strong class="text-dark small d-block mb-1"><i class="fa-solid fa-shield-halved text-success me-1"></i> Recommended Dispatch Actions:</strong>
+                                <ul id="aiActionsList" class="small ps-3 mb-0 text-success fw-semibold"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Emergency Call Transcript Summarizer -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="fa-solid fa-microphone-lines text-info me-2"></i>Call Transcript Summarizer
+                    </h5>
+                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="loadSampleTranscript()">
+                        Load Sample Call
+                    </button>
+                </div>
+                <div class="card-body p-4 d-flex flex-column">
+                    <label class="form-label small fw-bold text-secondary mb-1">911 / Dispatcher Audio Call Transcript:</label>
+                    <textarea id="transcriptInput" class="form-control mb-3 flex-grow-1" rows="9" placeholder="Paste dispatcher call transcript here or click 'Load Sample Call'..."></textarea>
+                    
+                    <button id="analyzeTranscriptBtn" class="btn btn-info fw-bold text-white mb-3" onclick="analyzeTranscript()">
+                        <i class="fa-solid fa-file-invoice text-white me-1"></i> Summarize Call Transcript
+                    </button>
+
+                    <div id="transcriptResultBox" class="p-3 bg-light rounded border small d-none">
+                        <strong class="d-block text-dark mb-1"><i class="fa-solid fa-check-double text-success me-1"></i> Dispatch Summary:</strong>
+                        <div id="transcriptResultText" class="text-secondary"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const caseSelect = document.getElementById("aiCaseSelect");
+    if (caseSelect) {
+        caseSelect.addEventListener("change", (e) => {
+            const opt = e.target.selectedOptions[0];
+            if (opt && opt.dataset.desc) {
+                document.getElementById("aiInputDesc").value = opt.dataset.desc;
+            }
+        });
+    }
+});
+
+async function executeAiTriage() {
+    const desc = document.getElementById("aiInputDesc").value.trim();
+    if (!desc) {
+        alert("Please enter or select an incident description first.");
+        return;
+    }
+
+    const select = document.getElementById("aiCaseSelect");
+    const opt = select.selectedOptions[0];
+    const caseId = select.value;
+
+    const btn = document.getElementById("runAiTriageBtn");
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Analyzing with Groq AI...';
+
+    try {
+        let res;
+        if (caseId) {
+            const resp = await fetch(`/api/cases/${caseId}/ai-analyze`, { method: "POST" });
+            res = await resp.json();
+            if (res.success) {
+                renderAiOutput(res.data);
+            } else {
+                alert("AI Analysis Error: " + res.error);
+            }
+        } else {
+            // Ad-hoc submission
+            const resp = await fetch("/api/cases", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    emergency_type: "Medical Emergency",
+                    location_name: "Emergency Operations Assessment Zone",
+                    description: desc,
+                    people_affected: 1
+                })
+            });
+            res = await resp.json();
+            if (res.success && res.data.latest_ai) {
+                renderAiOutput(res.data.latest_ai);
+            }
+        }
+    } catch (e) {
+        alert("Error connecting to AI service: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+
+function renderAiOutput(ai) {
+    const outBox = document.getElementById("aiAnalysisOutput");
+    outBox.classList.remove("d-none");
+
+    document.getElementById("aiModelBadge").textContent = ai.is_fallback ? "Deterministic Rule Engine (Fallback)" : "Groq AI (" + ai.model_used + ")";
+    document.getElementById("aiPriorityBadge").textContent = ai.recommended_priority || "HIGH";
+    document.getElementById("aiSummaryText").textContent = ai.summary || "";
+
+    const factsList = document.getElementById("aiFactsList");
+    factsList.innerHTML = (ai.extracted_facts || []).map(f => `<li>${f}</li>`).join('');
+
+    const resList = document.getElementById("aiResourcesList");
+    resList.innerHTML = (ai.recommended_resources || []).map(r => `<li>${r}</li>`).join('');
+
+    const missList = document.getElementById("aiMissingList");
+    missList.innerHTML = (ai.missing_information || []).map(m => `<li>${m}</li>`).join('');
+
+    const actList = document.getElementById("aiActionsList");
+    actList.innerHTML = (ai.recommended_actions || []).map(a => `<li>${a}</li>`).join('');
+}
+
+function loadSampleTranscript() {
+    document.getElementById("transcriptInput").value = 
+`DISPATCHER: "ResQAI Emergency Command, Officer Rajesh speaking. What is your emergency?"
+CALLER: "Help! There was a massive transformer blowout near the market gate at Tirupati Central Bus Station! The rain is pouring down, sparks flew everywhere, and the timber shop adjacent has caught fire! There are two shopkeepers trapped in the back office unable to get out because power lines fell across the exit!"
+DISPATCHER: "Understood, stay clear of the water and lines. Are they conscious? Do you smell gas?"
+CALLER: "Yes, they are banging on the window, they are conscious, but the smoke is thick black! No gas smell, but water is rising around the downed cables!"
+DISPATCHER: "All units notified. Immediate Fire Tender foam squad and electricity board isolation dispatched. Keep everyone at least 30 meters away from the standing water. Help is on the way."`;
+}
+
+async function analyzeTranscript() {
+    const text = document.getElementById("transcriptInput").value.trim();
+    if (!text) {
+        alert("Please paste or load a transcript first.");
+        return;
+    }
+
+    const btn = document.getElementById("analyzeTranscriptBtn");
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Summarizing...';
+
+    try {
+        const resp = await fetch("/api/ai/transcript", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transcript: text, caller_role: "Citizen Caller" })
+        });
+        const res = await resp.json();
+        if (res.success) {
+            const box = document.getElementById("transcriptResultBox");
+            document.getElementById("transcriptResultText").textContent = res.data.summary;
+            box.classList.remove("d-none");
+        } else {
+            alert("Error: " + res.error);
+        }
+    } catch (e) {
+        alert("Failed to summarize transcript: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+</script>
+{% endblock %}

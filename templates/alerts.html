@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}ResQAI — Public Weather & Disaster Alerts{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark"><i class="fa-solid fa-cloud-bolt text-warning me-2"></i>Public Weather & Disaster Alerts Broadcast</h4>
+            <small class="text-muted">Issue, simulate, and broadcast emergency hazard advisories to citizens and response teams.</small>
+        </div>
+        <div>
+            <button class="btn btn-sm btn-outline-primary" onclick="window.location.reload()">
+                <i class="fa-solid fa-rotate me-1"></i> Refresh Feed
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert Simulation Control Deck -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="fw-bold mb-0 text-dark">
+                <i class="fa-solid fa-satellite-dish text-danger me-2"></i>Emergency Weather Alert Simulator (Prototype Drills)
+            </h5>
+            <small class="text-muted">Broadcast simulated alerts to test citizen portal reception and operator dispatch workflows.</small>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label small fw-bold text-secondary">Target Geographic Zone:</label>
+                    <select id="simLocationSelect" class="form-select">
+                        {% for loc in locations %}
+                            <option value="{{ loc.name }}" data-lat="{{ loc.lat }}" data-lng="{{ loc.lng }}">
+                                {{ loc.name }} ({{ loc.district }}, {{ loc.state }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-5">
+                    <label class="form-label small fw-bold text-secondary">Simulated Disaster Event:</label>
+                    <select id="simTemplateSelect" class="form-select">
+                        <option value="heavy_rain">Heavy Rainfall & Waterlogging Advisory (HIGH)</option>
+                        <option value="thunderstorm">Severe Thunderstorm & Lightning Squall (CRITICAL)</option>
+                        <option value="cyclone">Cyclonic Gale Wind & Storm Surge (CRITICAL)</option>
+                        <option value="urban_flood">Flash Flood & River Inundation Warning (CRITICAL)</option>
+                        <option value="heatwave">Extreme Heatwave & Sunstroke Risk (MEDIUM)</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <button class="btn btn-danger fw-bold w-100" onclick="launchSimulatedAlert()">
+                        <i class="fa-solid fa-bullhorn me-1"></i> Broadcast Alert Drill
+                    </button>
+                </div>
+            </div>
+            
+            <div class="alert alert-warning py-2 px-3 small mt-3 mb-0">
+                <i class="fa-solid fa-circle-exclamation me-1"></i> All simulated warnings are visibly marked with <code>[SIMULATION]</code> to prevent public confusion. Duplicate alerts for identical zones are automatically suppressed.
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Alerts Ledger -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-dark">Active Public Warnings Ledger</h5>
+            <span class="badge bg-dark">{{ alerts|length }} Alerts Active</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light text-secondary small text-uppercase">
+                    <tr>
+                        <th>Alert Code</th>
+                        <th>Severity</th>
+                        <th>Type</th>
+                        <th>Zone</th>
+                        <th>Headline & Guidelines</th>
+                        <th>Source</th>
+                        <th>Issued</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in alerts %}
+                        <tr>
+                            <td class="fw-bold text-nowrap">{{ a.alert_code }}</td>
+                            <td>
+                                <span class="badge" style="background-color: {{ priorities[a.severity].color }}; color: {% if a.severity == 'MEDIUM' %}#000{% else %}#fff{% endif %};">
+                                    {{ a.severity }}
+                                </span>
+                            </td>
+                            <td class="fw-semibold">{{ a.alert_type }}</td>
+                            <td><i class="fa-solid fa-location-dot text-danger me-1"></i>{{ a.area_name }}</td>
+                            <td>
+                                <div class="fw-bold small text-dark">{{ a.title }}</div>
+                                <div class="text-secondary small text-truncate" style="max-width: 400px;" title="{{ a.message }}">
+                                    {{ a.message }}
+                                </div>
+                            </td>
+                            <td><small class="badge bg-light text-dark border">{{ a.source }}</small></td>
+                            <td class="text-nowrap small text-muted">{{ a.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+async function launchSimulatedAlert() {
+    const locSelect = document.getElementById("simLocationSelect");
+    const opt = locSelect.selectedOptions[0];
+    const locName = locSelect.value;
+    const lat = opt.dataset.lat;
+    const lng = opt.dataset.lng;
+    const templateKey = document.getElementById("simTemplateSelect").value;
+
+    try {
+        const resp = await fetch("/api/alerts/simulate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                template_key: templateKey,
+                location_name: locName,
+                latitude: parseFloat(lat),
+                longitude: parseFloat(lng)
+            })
+        });
+        const res = await resp.json();
+        if (res.success) {
+            alert(res.message);
+            window.location.reload();
+        } else {
+            alert("Error: " + res.error);
+        }
+    } catch (e) {
+        alert("Failed to broadcast alert: " + e.message);
+    }
+}
+</script>
+{% endblock %}
